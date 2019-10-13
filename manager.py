@@ -1,6 +1,6 @@
 import numpy as np
 
-from keras.models import Model
+from keras.models import Model, load_model
 from keras import backend as K
 from keras.callbacks import ModelCheckpoint
 import tensorflow as tf
@@ -61,11 +61,12 @@ class NetworkManager:
 
         action_str = (',').join([str(item) for item in actions])
         with tf.Session(graph=tf.Graph()) as network_sess:
+            K.set_session(network_sess)
             if action_str in self.models:
-                model = self.models[action_str]
+                #model = self.models[action_str]
+                print('encounter re-use model')
+                model = load_model('models/' + action_str)
             else:
-                K.set_session(network_sess)
-
                 # generate a submodel given predicted actions
                 model = model_fn(actions)  # type: Model
                 model.compile('adam', 'categorical_crossentropy', metrics=['accuracy'])
@@ -81,9 +82,10 @@ class NetworkManager:
                                                  monitor='val_acc', verbose=1,
                                                  save_best_only=True,
                                                  save_weights_only=True)])
+            model.save('models/' + action_str)
 
             # load best performance epoch in this training session
-            model.load_weights('weights/temp_network.h5')
+            # model.load_weights('weights/temp_network.h5')
 
             # evaluate the model
             loss, acc = model.evaluate(X_val, y_val, batch_size=self.batchsize)

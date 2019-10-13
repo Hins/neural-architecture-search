@@ -1,6 +1,6 @@
 import numpy as np
 import csv
-from datetime import datetime
+import datetime
 
 import tensorflow as tf
 from keras import backend as K
@@ -26,7 +26,7 @@ EMBEDDING_DIM = 20  # dimension of the embeddings for each state
 ACCURACY_BETA = 0.8  # beta value for the moving average of the accuracy
 CLIP_REWARDS = 0.0  # clip rewards in the [-0.05, 0.05] range
 RESTORE_CONTROLLER = True  # restore controller to continue training
-TOP_K_CANDIDATE_ACTION = 5
+#TOP_K_CANDIDATE_ACTION = 5
 
 # construct a state space
 state_space = StateSpace()
@@ -103,15 +103,17 @@ controller.remove_files()
 best_acc = 0.0
 best_state_space = []
 # used to dedup action info
-action_history_dict = {}
+#action_history_dict = {}
 
-start_time = datetime.now()
+start_time = datetime.datetime.now()
+print(start_time.strftime('%H:%M:%S'))
 # train for number of trails
 for trial in range(MAX_TRIALS):
     with policy_sess.as_default():
         K.set_session(policy_sess)
-        actions_set = controller.get_action(state, TOP_K_CANDIDATE_ACTION)  # get an action for the previous state
+        actions = controller.get_action(state)  # get an action for the previous state
 
+    '''
     new_action_flag = False
     for action in actions_set:
         action_str = ','.join([str(item) for item in state_space.parse_state_space_list(action)])
@@ -123,6 +125,7 @@ for trial in range(MAX_TRIALS):
         print('no new action in %d trial, action_str is %s' % (trial, action_str))
         continue
     action_history_dict[action_str] = 1
+    '''
 
     # print the action probabilities
     state_space.print_actions(actions)
@@ -157,7 +160,7 @@ for trial in range(MAX_TRIALS):
             writer.writerow(data)
     print()
 
-end_time = datetime.now()
-print("Time cost is %d seconds" % (start_time - end_time).seconds)
+end_time = datetime.datetime.now()
+print(end_time.strftime('%H:%M:%S'))
 print("Total Reward : %f, best accuracy is %f" % (total_reward, best_acc))
 print("best actions ", state_space.parse_state_space_list(best_state_space))

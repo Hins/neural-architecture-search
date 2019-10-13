@@ -213,7 +213,7 @@ class Controller:
 
         self.build_policy_network()
 
-    def get_action(self, state, top_k):
+    def get_action(self, state):
         '''
         Gets a one hot encoded action list, either from random sampling or from
         the Controller RNN
@@ -227,26 +227,28 @@ class Controller:
         '''
         if np.random.random() < self.exploration:
             print("Generating random action to explore")
-            all_actions = []
-            iter = 0
-            action_dedup_dict = {}
-            while iter < top_k:
-                actions = []
-                actions_str_list = []
-                for i in range(self.state_size * self.num_layers):
-                    state_ = self.state_space[i]
-                    size = state_['size']
-                    sample = np.random.choice(size, size=1)
-                    actions_str_list.append(sample)
-                    sample = state_['index_map_'][sample[0]]
-                    action = self.state_space.embedding_encode(i, sample)
-                    actions.append(action)
-                action_str = (',').join([str(item[0]) for item in actions_str_list])
-                if action_str not in action_dedup_dict:
-                    action_dedup_dict[action_str] = 1
-                    all_actions.append(actions)
-                    iter += 1
-            return all_actions
+            #all_actions = []
+            #iter = 0
+            #action_dedup_dict = {}
+            #while iter < top_k:
+            actions = []
+            #actions_str_list = []
+            for i in range(self.state_size * self.num_layers):
+                state_ = self.state_space[i]
+                size = state_['size']
+                sample = np.random.choice(size, size=1)
+                #actions_str_list.append(sample)
+                sample = state_['index_map_'][sample[0]]
+                action = self.state_space.embedding_encode(i, sample)
+                actions.append(action)
+            '''
+            action_str = (',').join([str(item[0]) for item in actions_str_list])
+            if action_str not in action_dedup_dict:
+                action_dedup_dict[action_str] = 1
+                all_actions.append(actions)
+                iter += 1
+            '''
+            return actions
 
         else:
             print("Prediction action from Controller")
@@ -265,7 +267,7 @@ class Controller:
                 with tf.name_scope('action_prediction'):
                     pred_actions = self.policy_session.run(self.policy_actions, feed_dict={self.state_input: state})
 
-                return [pred_actions]
+                return pred_actions
 
 
     def build_policy_network(self):
