@@ -1,10 +1,9 @@
 import numpy as np
 import csv
+from datetime import datetime
 
-import random
 import tensorflow as tf
 from keras import backend as K
-from keras.datasets import cifar10
 from keras.utils import to_categorical
 
 from controller import Controller, StateSpace
@@ -16,17 +15,18 @@ policy_sess = tf.Session()
 K.set_session(policy_sess)
 
 NUM_LAYERS = 2  # number of layers of the state space
-MAX_TRIALS = 2  # maximum number of models generated, adjust by xtpan from 250 to 2
+MAX_TRIALS = 100  # maximum number of models generated, adjust by xtpan from 250 to 100
 
-MAX_EPOCHS = 2  # maximum number of epochs to train, adjust by xtpan from 10 to 2
-CHILD_BATCHSIZE = 128  # batchsize of the child models
-EXPLORATION = 0.8  # high exploration for the first 1000 steps
+MAX_EPOCHS = 1  # maximum number of epochs to train, adjust by xtpan from 10 to 2
+CHILD_BATCHSIZE = 512  # batchsize of the child models
+EXPLORATION = 0.7  # high exploration for the first 1000 steps
 REGULARIZATION = 1e-3  # regularization strength
 CONTROLLER_CELLS = 32  # number of cells in RNN controller
 EMBEDDING_DIM = 20  # dimension of the embeddings for each state
 ACCURACY_BETA = 0.8  # beta value for the moving average of the accuracy
 CLIP_REWARDS = 0.0  # clip rewards in the [-0.05, 0.05] range
 RESTORE_CONTROLLER = True  # restore controller to continue training
+TOP_K_CANDIDATE_ACTION = 5
 
 # construct a state space
 state_space = StateSpace()
@@ -44,35 +44,34 @@ x_train = []
 y_train = []
 x_test = []
 y_test = []
-with open('nlp/feature.filter', 'r') as f:
+label_size = 0
+with open('nlp/train.dat', 'r') as f:
     for line in f:
         elements = line.strip('\r\n').split('\t')
-        if random.uniform(0, 1) < 0.8:
-            x_train.append(elements[0].split(','))
-            y_train.append(elements[1])
-        else:
-            x_test.append(elements[0].split(','))
-            y_test.append(elements[1])
+        x_train.append(elements[0].split(','))
+        y_train.append(elements[1])
+        if int(elements[1]) > label_size:
+            label_size = int(elements[1])
     f.close()
+with open('nlp/val.dat', 'r') as f:
+    for line in f:
+        elements = line.strip('\r\n').split('\t')
+        x_test.append(elements[0].split(','))
+        y_test.append(elements[1])
+        if int(elements[1]) > label_size:
+            label_size = int(elements[1])
+    f.close()
+label_size += 1
+print('label size is %d' % label_size)
 x_train = np.asarray(x_train, dtype=np.int32)
 y_train = np.asarray(y_train, dtype=np.int32)
 x_test = np.asarray(x_test, dtype=np.int32)
 y_test = np.asarray(y_test, dtype=np.int32)
 
 y_train = np.reshape(y_train, newshape=[y_train.shape[0], 1])
-y_train = to_categorical(y_train, num_classes=22)
+y_train = to_categorical(y_train, num_classes=label_size)
 y_test = np.reshape(y_test, newshape=[y_test.shape[0], 1])
-y_test = to_categorical(y_test, num_classes=22)
-
-'''
-# prepare the training data for the NetworkManager
-(x_train, y_train), (x_test, y_test) = cifar10.load_data()
-x_train = x_train.astype('float32') / 255.
-x_test = x_test.astype('float32') / 255.
-print(y_train.shape)
-y_train = to_categorical(y_train, 10)
-y_test = to_categorical(y_test, 10)
-'''
+y_test = to_categorical(y_test, num_classes=label_size)
 
 dataset = [x_train, y_train, x_test, y_test]  # pack the dataset for the NetworkManager
 
@@ -101,11 +100,29 @@ print()
 # clear the previous files
 controller.remove_files()
 
+best_acc = 0.0
+best_state_space = []
+# used to dedup action info
+action_history_dict = {}
+
+start_time = datetime.now()
 # train for number of trails
 for trial in range(MAX_TRIALS):
     with policy_sess.as_default():
         K.set_session(policy_sess)
-        actions = controller.get_action(state)  # get an action for the previous state
+        actions_set = controller.get_action(state, TOP_K_CANDIDATE_ACTION)  # get an action for the previous state
+
+    new_action_flag = False
+    for action in actions_set:
+        action_str = ','.join([str(item) for item in state_space.parse_state_space_list(action)])
+        actions = action
+        if action_str not in action_history_dict:
+            new_action_flag = True
+            break
+    if new_action_flag is False:
+        print('no new action in %d trial, action_str is %s' % (trial, action_str))
+        continue
+    action_history_dict[action_str] = 1
 
     # print the action probabilities
     state_space.print_actions(actions)
@@ -114,6 +131,9 @@ for trial in range(MAX_TRIALS):
     # build a model, train and get reward and accuracy from the network manager
     reward, previous_acc = manager.get_rewards(model_fn, state_space.parse_state_space_list(actions))
     print("Rewards : ", reward, "Accuracy : ", previous_acc)
+    if previous_acc > best_acc:
+        best_acc = previous_acc
+        best_state_space = actions
 
     with policy_sess.as_default():
         K.set_session(policy_sess)
@@ -137,4 +157,7 @@ for trial in range(MAX_TRIALS):
             writer.writerow(data)
     print()
 
-print("Total Reward : ", total_reward)
+end_time = datetime.now()
+print("Time cost is %d seconds" % (start_time - end_time).seconds)
+print("Total Reward : %f, best accuracy is %f" % (total_reward, best_acc))
+print("best actions ", state_space.parse_state_space_list(best_state_space))

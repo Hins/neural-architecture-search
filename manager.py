@@ -30,6 +30,7 @@ class NetworkManager:
         self.beta = acc_beta
         self.beta_bias = acc_beta
         self.moving_acc = 0.0
+        self.models = {}
 
     def get_rewards(self, model_fn, actions):
         '''
@@ -57,12 +58,18 @@ class NetworkManager:
         Returns:
             a reward for training a model with the given actions
         '''
-        with tf.Session(graph=tf.Graph()) as network_sess:
-            K.set_session(network_sess)
 
-            # generate a submodel given predicted actions
-            model = model_fn(actions)  # type: Model
-            model.compile('adam', 'categorical_crossentropy', metrics=['accuracy'])
+        action_str = (',').join([str(item) for item in actions])
+        with tf.Session(graph=tf.Graph()) as network_sess:
+            if action_str in self.models:
+                model = self.models[action_str]
+            else:
+                K.set_session(network_sess)
+
+                # generate a submodel given predicted actions
+                model = model_fn(actions)  # type: Model
+                model.compile('adam', 'categorical_crossentropy', metrics=['accuracy'])
+                self.models[action_str] = model
 
             # unpack the dataset
             X_train, y_train, X_val, y_val = self.dataset

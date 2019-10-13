@@ -19,7 +19,7 @@ def model_fn(actions):
 
     emb_1, bidirect_lstm_1, filter_1, kernel_1, emb_2, bidirect_lstm_2, filter_2, kernel_2 = actions
     model = Sequential()
-    model.add(Embedding(3715, emb_1, input_length=12, name='emb'))
+    model.add(Embedding(32085, emb_1, input_length=8, name='emb'))
     # model.add(LSTM(bidirect_lstm_1))
 
     # sequential network
@@ -34,17 +34,12 @@ def model_fn(actions):
 
     # stack bilstm + convolutional network
     model.add(Bidirectional(LSTM(bidirect_lstm_1, return_sequences=True), name='bilstm1'))
-    model.add(Bidirectional(LSTM(bidirect_lstm_2), name='bilstm2'))
+    #model.add(Bidirectional(LSTM(bidirect_lstm_2), name='bilstm2'))
     model.add(Reshape((-1, 1, 1)))
     model.add(Conv2D(filter_1, [kernel_1, kernel_1], strides=(1, 1), padding='same', activation='relu', name='conv'))
     model.add(GlobalAveragePooling2D())
-    model.add(Dense(22, activation='sigmoid', name='dense'))
-    for layer in model.layers:
-        print(layer.output_shape)
-
+    model.add(Dense(40, activation='sigmoid', name='dense'))
     return model
-
-
 
 def model_fn_nlp(actions):
     input = Input(shape=())
